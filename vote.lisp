@@ -1,4 +1,4 @@
-#!/usr/local/bin/sbcl --script
+;#!/usr/local/bin/sbcl --script
 
 (let ((quicklisp-init (merge-pathnames "quicklisp/setup.lisp"
                                        (user-homedir-pathname))))
@@ -26,6 +26,27 @@
   ((name  :initarg  :name :accessor name)
    (description  :initarg  :description :accessor description)
    (votes :initform 0 :accessor votes)))
+
+(defvar *counter-actions* nil)
+(defmacro def-counter-action (name argname &body body)
+  `(progn
+  (push ,name *counter-actions*)
+  (hunchentoot:define-easy-handler (,(intern name) :uri ,(format nil "/~a.htm" name)) (name)
+    (let ((,argname (counter-by-name name)))
+      ,@body
+      (redirect (format nil "/counter.htm?name=~a" (name ,argname)))))))
+
+(defmacro render-counter-actions (counter)
+   `(dolist (action *counter-actions*)
+     (htm
+       (:a :href (format nil "~a.htm?name=~a" action (name ,counter)) (fmt "~a" action))
+       (:br))))
+
+(def-counter-action "up vote" counter
+  (incf (votes counter)))
+
+(def-counter-action "down vote" counter
+  (decf (votes counter)))
 
 (defvar *counters* nil)
 
@@ -69,20 +90,9 @@
        (:h2 (fmt "~a" (name counter)))
        (:i (fmt "~a" (description counter)))
        (:p (fmt "It currently has ~d votes" (votes counter)))
-       (:a :href (format nil "up-vote.htm?name=~a" (name counter)) "Vote up!")
+       (render-counter-actions counter)
        (:br)
-       (:a :href (format nil "down-vote.htm?name=~a" (name counter)) "Vote down!"))))
-
-(hunchentoot:define-easy-handler (up-vote :uri "/up-vote.htm") (name)
-  (let ((counter (counter-by-name name)))
-    (incf (votes counter))
-    (redirect (format nil "/counter.htm?name=~a" (name counter)))))
-
-(hunchentoot:define-easy-handler (down-vote :uri "/down-vote.htm") (name)
-  (let ((counter (counter-by-name name)))
-    (decf (votes counter))
-    (redirect (format nil "/counter.htm?name=~a" (name counter)))))
-
+       (:a :href "/" "Back"))))
 
 (hunchentoot:define-easy-handler (index :uri "/") ()
   (standard-page (:title "Vote Lisp")
